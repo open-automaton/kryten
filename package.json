@@ -1,5 +1,5 @@
 {
-    "name": "kryten",
+    "name": "@open-automaton/kryten",
     "version": "0.0.1",
     "type": "module",
     "main": "dist/index.mjs",
@@ -23,17 +23,17 @@
             "require": "./dist/index.cjs"
         }
     },
-    "homepage": "null",
-    "description": "null",
+    "homepage": "https://github.com/open-automaton/kryten",
+    "description": "A base for a verbal chat agent",
     "keywords": [],
-    "author": "null <null>()",
+    "author": "Abbey Hawk Sparrow <khrome>(http://abbeyhawksparrow.com)",
     "contributors": [],
     "repository": {
         "type": "git",
-        "url": "null"
+        "url": "git@github.com:open-automaton/kryten.git"
     },
     "bugs": {
-        "url": "null"
+        "url": "https://github.com/open-automaton/kryten/issues"
     },
     "moka": {
         "firefox": {
@@ -58,6 +58,8 @@
         "stubs": [
             "express",
             "module",
+            "node:module",
+            "@echogarden/macos-native-tts",
             "os",
             "fs",
             "path"
@@ -89,7 +91,7 @@
         "import-test": "mocha test/test.mjs",
         "require-test": "mocha test/test.cjs",
         "build-commonjs": "./node_modules/@environment-safe/commonjs-builder/bin/build.mjs",
-        "local-server": "open 'http://localhost:8085/' ; npx http-server -p 8085",
+        "local-server": "open 'http://localhost:8085/demo.html' ; npx http-server -p 8085",
         "headless-browser-test": "npm run headless-chrome-test; npm run headless-firefox-test; npm run headless-safari-test",
         "headless-chrome-test": "moka --server . --browser chrome test/test.mjs",
         "headless-firefox-test": "moka --server . --browser firefox test/test.mjs",
@@ -102,6 +104,10 @@
         "prepare": "husky install"
     },
     "dependencies": {
+        "@environment-safe/event-emitter": "^0.0.1",
+        "@environment-safe/ollama": "^0.0.1",
+        "@environment-safe/random": "^0.0.1",
+        "@environment-safe/speech": "^0.0.2",
         "browser-or-node": "^2.1.1"
     }
 }
