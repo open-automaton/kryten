@@ -14,11 +14,10 @@ It's currently in a pre-alpha state, and only runs in the client, but this will 
 Main Loop
 ---------
 <script src="https://unpkg.com/mermaid@8.8.4/dist/mermaid.min.js"></script>
-<div style="float:right">
+
 ```mermaid
 graph TD;Query-->SpeechToText;SpeechToText-->DestructureQuery;DestructureQuery-->ProducePlans;ProducePlans-->Approval; Approval-->RPAExecute; RPAExecute-->Query; RPAExecute-->Results; Results-->Scoring; Scoring-->Testing; Testing-->TestResults; TestResults-->Hypothesis; Hypothesis-->Query;
 ```
-</div>
 
 - **Natural Language**
     - extract parts of speech along with:
