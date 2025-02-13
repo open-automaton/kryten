@@ -2,7 +2,7 @@
 ============================
 "If you don't GOSUB a program loop, you'll never get a subroutine."
 
-Kryten is a [HESL](docs/HESL.md) which allows you to create and execute plans of action based on verbal conversations through an LLM running on [ollama](https://ollama.com) and generate basic personality and perspective in a deterministic way. While this is a generalized agent system, it's intended use is around generating realistic long term NPC interactions (underneath static options), rather than contributing to the AI hype hellscape. It also supports explicit pattern matching so you can build a fixed set of options and rely on the LLM to be otherwise conversational.
+Kryten is a [IEOL](docs/IEOL.md) which allows you to create and execute plans of action based on verbal conversations through an LLM running on [ollama](https://ollama.com) and generate basic personality and perspective in a deterministic way. While this is a generalized agent system, it's intended use is around generating realistic long term NPC interactions (underneath static options), rather than contributing to the AI hype hellscape. It also supports explicit pattern matching so you can build a fixed set of options and rely on the LLM to be otherwise conversational.
 
 It currently does not support plan evaluation, but will eventually support bidirectional planning (generating it's own work as well as accepting external work).
 
@@ -55,32 +55,64 @@ Usage
 -----
 
 ```js
-import { 
-    Kryten, Personality, PersonalityComponent 
-} from '@open-automaton/kryten';
+import { Personality, PersonalityComponent, IEOL } from '@open-automaton/kryten';
+import { ConsoleIO } from '@open-automaton/kryten/src/console-io.mjs';
+import { SpeechIO } from '@open-automaton/kryten/src/speech-io.mjs';
 
-const bot = new Kryten({
-    voice: {
-        name:'Zarvox',
-        pitch: 1.0,
-        rate: 1.0
-    },
+const loop = new IEOL({
+    channels : [
+        new ConsoleIO({}),
+        new SpeechIO({
+            voice: {
+                name:'Zarvox',
+                pitch: 1.0,
+                rate: 1.0
+            }
+        })
+    ],
     personality: new Personality({
         seed: 'fdfds-fdsfds-dsffzgfsd',
         components: [
             new PersonalityComponent({
                 name: 'PrimaryDirective', 
-                text:'You are the robot Kryten from the BBC series Red Dwarf'
+                text:'You are the robot Kryten from the BBC series Red Dwarf' //...
             }),
             ...PersonalityComponent.choose([
                 'agent', 'state'
             ])
         ]
-    });
+    })
 });
+loop.command('terminate', async (values, qid, instance)=>{
+    instance.respond('Shutting down', qid);
+    instance.stopListeningForInput();
+    return true;
+});
+loop.command(/what does (?<expression>.*) equal/g, async (values, qid, instance)=>{
+    //not really safe unless input is cleaned:
+    let result = eval(values.expression);
+    instance.respond(result, qid);
+});
+loop.listenForInput(true);
+```
 
-const stop = bot.hesl();
-bot.command('terminate', stop);
+You can get something like this directly with:
+```js
+import { Kryten } from '@open-automaton/kryten/bots/kryten.mjs';
+
+const loop = new Kryten({
+    channels : [
+        new ConsoleIO({}),
+        new SpeechIO({
+            voice: {
+                name:'Zarvox',
+                pitch: 1.0,
+                rate: 1.0
+            }
+        })
+    ]
+});
+loop.listenForInput(true);
 ```
 
 Testing

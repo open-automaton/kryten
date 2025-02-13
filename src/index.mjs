@@ -1,73 +1,192 @@
 import { Speech } from '@environment-safe/speech';
 import { Ollama } from '@environment-safe/ollama';
 import { ExtendedEmitter } from '@environment-safe/event-emitter';
-import { Random } from '@environment-safe/random';
-import sift from 'sift';
+//import { Random } from '@environment-safe/random';
+//import sift from 'sift';
+import { Personality, PersonalityComponent } from './personality.mjs';
 
-export class PersonalityComponent{
+//Input-Evaluate-Output Loop
+export class IEOL{
     constructor(options={}){
         this.options = options;
-    }
-    
-    persona(seed, person){ 
-        const random = new Random({seed});
-        if(this.options.seed) {
-            this.options.seed(random, person);
-            return {};
-        }
-        return {};
-    }
-    
-    build(analyzedState, persona){
-        if(this.options.text) return this.options.text;
-        if(this.options.state) return this.options.state(analyzedState, persona);
-    }
-}
-
-export class Personality{
-    constructor(options={}){
-        this.options = options;
-        this.plans = [];
-        this.seed = this.options.seed || 'default-seed';
-        //if(options.plans) options.plans.forEach((plan)=> this.planner(plan));
-        if(this.options.components){
-            this.persona = this.person();
-        }
-    }
-    
-    person(){ //object(name, text)
-        //TODO: make plans experimental(with some always experimental)
-        const persona = {};
-        const components = this.options.components;
-        let attributes = null;
-        let attributeKeys = null;
-        for(let lcv=0; lcv < components.length; lcv++){
-            attributes = components[lcv].persona(this.seed, persona);
-            attributeKeys = Object.keys(attributes);
-            for(let attributeIndex=0; attributeIndex < attributeKeys.length; attributeIndex++){
-                persona[attributeKeys[attributeIndex]] = attributes[attributeKeys[attributeIndex]];
+        this.ready = Speech.ready;
+        this.llm = new Ollama();
+        this.analyzers = [];
+        this.fields = [];
+        this.commands = [];
+        this.chatlog = [];
+        this.personality = options.personality || new Personality();
+        this.persona = this.personality.person();
+        this.modelName = this.options.model || 'llama2';
+        (new ExtendedEmitter()).onto(this);
+        if(this.options.channels){
+            let channel = null;
+            for(let lcv=0; lcv < this.options.channels.length; lcv++){
+                channel = this.options.channels[lcv];
+                this.addChannel(channel);
             }
         }
-        return persona;
+        /*this.ready.then(()=>{
+            this.emit('voices', { voices: this.tts.voices });
+        })*/
     }
     
-    build(context={}){
-        const components = this.options.components;
-        const results = [];
-        let state = null;
-        for(let lcv=0; lcv < components.length; lcv++){
-            state = {
-                seed:this.seed, 
-                persona: this.person(),
-                ...context
-            };
-            results.push(components[lcv].build(state));
+    async respond(text, qid){
+        const futures = this.options.channels.map((channel)=>{
+            const result = new Promise((resolve, reject)=>{
+                channel.once('response-end', {qid: {$eq: qid}}, (event)=>{
+                    resolve();
+                });
+            });
+            channel.emit('response', {message: text, qid});
+            return result;
+        });
+        await Promise.all(futures);
+    }
+    
+    listenForInput(loop=false){
+        let channel = null;
+        for(let lcv=0; lcv < this.options.channels.length; lcv++){
+            channel = this.options.channels[lcv];
+            channel.listenForInput(loop);
         }
-        return results.join('\n\n');
+    }
+    
+    stopListeningForInput(){
+        let channel = null;
+        for(let lcv=0; lcv < this.options.channels.length; lcv++){
+            channel = this.options.channels[lcv];
+            channel.stopRunLoop();
+        }
+    }
+    
+    command(pattern, handler){ //object(name, type, content)
+        this.commands.push({
+            pattern,
+            handler
+        });
+    }
+    
+    parseCommand(spoken){
+        let command = null;
+        for(let lcv=0; lcv< this.commands.length; lcv++){
+            command = this.commands[lcv];
+            if(typeof command.pattern === 'string' && spoken.toLowerCase() === command.pattern){
+                return command;
+            }
+            if(command.pattern instanceof RegExp){
+                //const matches = [];
+                //let match = null;
+                /*
+                while(match = command.pattern.exec(spoken.toLowerCase())){
+                    matches.push(match.groups);
+                } //*/
+                const match = command.pattern.exec(spoken.toLowerCase());
+                if(match){
+                    command.groups = match.groups;
+                    return command;
+                }
+            }
+        }
+    }
+    
+    addChannel(channel){
+        let command = null;
+        //TODO: blend or intersect voices
+        channel.on('voices', (voices)=>{
+            this.emit('voices', voices);
+        });
+        channel.on('query', async (options)=>{
+            const query = options.query;
+            const qid = options.qid;
+            const script = this.personality.build({
+                query,
+                chat: this.chatlog || [] 
+            });
+            this.chatlog.push({
+                user: 'user',
+                message: query
+            });
+            const prompt = `${script}${query}`;
+            this.emit('request', { message: query });
+            // eslint-disable-next-line no-cond-assign
+            if(command = this.parseCommand(query)){
+                const terminate = await command.handler(command.groups, qid, this);
+                if(terminate === true){
+                    this.running = false;
+                    return;
+                }
+            }else{
+                const data = await this.llm.generate({
+                    model: this.modelName,
+                    prompt
+                });
+                let res = data.response;
+                if(res[0] === '"' && res[res.length-1] === '"'){
+                    res = res.substring(1, res.length-1);
+                }
+                if(this.options.alterText){
+                    res = this.options.alterText(res);
+                }
+                this.chatlog.push({
+                    user: 'me',
+                    message: res
+                });
+                this.emit('response', { message: res, qid });
+                await this.respond(res, qid);
+            }
+        });
     }
 }
 
+export class IOSource{
+    constructor(options={}){
+        this.options = options;
+        (new ExtendedEmitter()).onto(this);
+    }
+    
+    async query(options){
+        const qid = Math.floor(Math.random() * 9999999999)+'';
+        const eventName = options.interruptible?'response':'response-end';
+        const response = new Promise((resolve, reject)=>{
+            this.once(eventName, {
+                qid: {$eq: qid}
+            }, (event)=>{
+                resolve(event.message); //TBD
+            });
+        });
+        this.emit('query', {
+            query: options.query,
+            qid
+        });
+        return await response;
+    }
+    
+    async setupRunLoop(looped=false, handler){
+        this.running = true;
+        const loopFn = async (loop=false)=>{
+            const response = await handler();
+            if(this.running && loop) setTimeout(()=>{ 
+                loopFn(loop); 
+            });
+            if(!this.running) return null;
+            return response;
+        };
+        return loopFn(looped);
+    }
+    
+    async stopRunLoop(){
+        this.running = false;
+    }
+    
+    async listenForInput(loop=false){
+        throw new Error('.listenForInput() not implemented!');
+    }
+}
 
+export { Personality, PersonalityComponent };
+
+/*
 export class Kryten{
     constructor(options={}){
         this.options = options;
@@ -145,10 +264,10 @@ export class Kryten{
             if(command.pattern instanceof RegExp){
                 //const matches = [];
                 //let match = null;
-                /*
-                while(match = command.pattern.exec(spoken.toLowerCase())){
-                    matches.push(match.groups);
-                } //*/
+                
+                //while(match = command.pattern.exec(spoken.toLowerCase())){
+                //    matches.push(match.groups);
+                //}
                 const match = command.pattern.exec(spoken.toLowerCase());
                 if(match){
                     command.groups = match.groups;
@@ -184,7 +303,6 @@ export class Kryten{
                     chat: this.chatlog 
                 });
                 const prompt = `${script}${spoken}`;
-                console.log(prompt);
                 this.emit('request', { message: spoken });
                 // eslint-disable-next-line no-cond-assign
                 if(command = this.parseCommand(spoken)){
@@ -225,94 +343,4 @@ export class Kryten{
     
     repl(){
     }
-}
-
-const formatLine = (name, value)=>{
-    switch(typeof value){
-        case 'string':
-            return `${name} is \`${value}\`\n`;
-        case 'number':
-            return `There are ${value} ${name}\n`;
-        default: return '';
-    }
-};
-
-const index = [
-    new PersonalityComponent({
-        name : 'state',
-        state : (state)=>{
-            let result = '';
-            state.words = state.query.split(' ').length;
-            state.sentences = state.query.split('.').length;
-            let keys = Object.keys(state);
-            for(let lcv=0; lcv < keys.length; lcv++){
-                if(typeof state[keys[lcv]] !== 'object'){
-                    result += formatLine(keys[lcv], state[keys[lcv]]);
-                }
-            }
-            if(state.persona){
-                keys = Object.keys(state.persona);
-                for(let lcv=0; lcv < keys.length; lcv++){
-                    if(typeof state.persona[keys[lcv]] !== 'object'){
-                        result += formatLine(keys[lcv], state.persona[keys[lcv]]);
-                    }
-                }
-            }
-            const min = Math.floor(state.words * 0.5);
-            const max = Math.floor(state.words * 2.5);
-            const chatText = state.chat.map((item)=>{
-                return `${item.user}: ${item.message}`;
-            }).join('\n');
-            return `The current state of the world
-------------
-${result}
-
-Chat Log
---------
-${chatText}
-
-Given this conversation, answer the following query in roughly ${min}-${max} words with no lists, no emojis, no stage directions, no emotes and avoid quotes: `;
-        }
-    }),
-    new PersonalityComponent({
-        name : 'ocean',
-        seed : (random, persona)=>{
-            const OCEAN = {
-                open: random.ratio(),
-                conscientious: random.ratio(),
-                extroverted: random.ratio(),
-                agreeable: random.ratio(),
-                neurotic: random.ratio()
-            };
-            persona.ocean = OCEAN;
-        },
-        state : ({seed, query, persona})=>{
-            let oceanScore = '';
-            const keys = Object.keys(persona.ocean);
-            for(let lcv=0; lcv < keys.length; lcv++){
-                oceanScore += `${keys[lcv]}: \`${persona.ocean[keys[lcv]]}\`\n`;
-            }
-            const ocean = `
-OCEAN Scale
------------
-- **Openness** : Openness is when someone is curious and open-minded to new experiences and knowledge. People who rate high in openness are inventive and curious. People who rate low in openness are consistent and cautious.
-- **Conscientiousness** : Conscientiousness is the trait that describes how organized and dependable you are. People high in this trait have high self-discipline, are very organized and prepared, and like to plan things out instead of being spontaneous. People who have this trait tend to live longer.
-- **Extroversion** : Extroversion describes how you interact with people. People who are high in extroversion (extroverts) are outgoing and energetic, while people who are low in extroversion (introverts) are more solitary and reserved and typically require recharge time from social interaction. As it turns out, people who are more outgoing and sociable have the strongest immune system compared to those who are more introspective and introverted. Extroversion is corrolated with a strong immune system.
-- **Agreeableness** : Agreeableness is how you feel towards others. Agreeableness is how you feel toward others. People who rate high in agreeableness are friendly and compassionate. People who rate low in agreeableness are more analytical and detached. Agreeability is corrolated to cardiovascular health.
-- **Neuroticism** : Neuroticism is how you deal with emotions. People who rate high in neuroticism are sensitive and tend to be more nervous. People who rate low in neuroticism tend to be more secure and stable.
-
-Your OCEAN scores (on a scale from 0.0 to 1.0) are:
-${oceanScore}`;
-            return ocean;
-        }
-    }),
-    new PersonalityComponent({
-        name : 'agent',
-        text : 'You are an AI agent, tasked with understanding and executing a fixed set of tasks in order to help users percieve their world and perform tasks. You are to assume a role as a character and answer queries based on that role rather than answering from the perspective of an AI. Do not reveal you are an AI or break character in any way.'
-    })
-];
-
-PersonalityComponent.choose = (nameList)=>{
-    const results = index.filter((item)=> nameList.indexOf(item.options.name) !== -1);
-    return results;
-};
+}*/

@@ -21,6 +21,38 @@
         "./dist/index.cjs": {
             "import": "./src/index.mjs",
             "require": "./dist/index.cjs"
+        },
+        "./bots/kryten.mjs": {
+            "import": "./bots/kryten.mjs",
+            "require": "./dist/bots/kryten.cjs"
+        },
+        "./bots/kryten.cjs": {
+            "import": "./bots/kryten.mjs",
+            "require": "./dist/bots/kryten.cjs"
+        },
+        "./src/console-io.mjs": {
+            "import": "./src/console-io.mjs",
+            "require": "./dist/console-io.cjs"
+        },
+        "./src/speech-io.mjs": {
+            "import": "./src/speech-io.mjs",
+            "require": "./dist/speech-io.cjs"
+        },
+        "./dist/console-io.cjs": {
+            "import": "./src/console-io.mjs",
+            "require": "./dist/console-io.cjs"
+        },
+        "./dist/speech-io.cjs": {
+            "import": "./src/speech-io.mjs",
+            "require": "./dist/speech-io.cjs"
+        },
+        "./src/console-io": {
+            "import": "./src/console-io.mjs",
+            "require": "./dist/console-io.cjs"
+        },
+        "./src/speech-io": {
+            "import": "./src/speech-io.mjs",
+            "require": "./dist/speech-io.cjs"
         }
     },
     "homepage": "https://github.com/open-automaton/kryten",
@@ -107,7 +139,10 @@
         "@environment-safe/event-emitter": "^0.0.1",
         "@environment-safe/ollama": "^0.0.1",
         "@environment-safe/random": "^0.0.1",
-        "@environment-safe/speech": "^0.0.2",
-        "browser-or-node": "^2.1.1"
+        "@environment-safe/runtime-context": "^0.0.1",
+        "@environment-safe/speech": "^0.0.6",
+        "@topcli/prompts": "^2.1.0",
+        "browser-or-node": "^2.1.1",
+        "prompts": "^2.4.2"
     }
 }

@@ -171,107 +171,59 @@
         <script type="importmap">{ "imports" :{
             "browser-or-node":"https://unpkg.com/browser-or-node@2.1.1/src/index.js", 
             "@environment-safe/package" : "https://unpkg.com/@environment-safe/package@0.1.3/src/index.mjs",
-            "@environment-safe/speech" : "https://unpkg.com/@environment-safe/speech@0.0.1/src/index.mjs",
+            "@environment-safe/speech" : "https://unpkg.com/@environment-safe/speech@0.0.5/src/index.mjs",
             "@environment-safe/event-emitter" : "https://unpkg.com/@environment-safe/event-emitter@0.0.1/src/index.mjs",
             "@environment-safe/random" : "https://unpkg.com/@environment-safe/random@0.0.1/src/index.mjs",
             "@environment-safe/ollama" : "https://unpkg.com/@environment-safe/ollama@0.0.1/src/index.mjs",
+            "@environment-safe/runtime-context" : "https://unpkg.com/@environment-safe/runtime-context@0.0.1/src/index.mjs",
             "sift": "https://www.unpkg.com/sift@17.0.1/es5m/index.js",
             "@open-automaton/kryten" : "./src/index.mjs",
+            "@open-automaton/kryten/bots/kryten.mjs" : "./bots/kryten.mjs",
+            "@open-automaton/kryten/src/speech-io.mjs" : "./src/speech-io.mjs",
+            "@open-automaton/kryten/src/console-io.mjs" : "./src/console-io.mjs",
             "module": "https://unpkg.com/browser-or-node@2.1.1/src/index.js",
             "node:events": "https://unpkg.com/extended-emitter@1.3.2/node-events.mjs",
             "@echogarden/macos-native-tts":"https://unpkg.com/browser-or-node@2.1.1/src/index.js",
-            "path": "https://unpkg.com/browser-or-node@2.1.1/src/index.js"
+            "path": "https://unpkg.com/browser-or-node@2.1.1/src/index.js",
+            "url": "https://unpkg.com/browser-or-node@2.1.1/src/index.js"
         }}</script>
         <!--<script
             type="module"
             src="https://cdn.jsdelivr.net/gh/zerodevx/zero-md@2/dist/zero-md.min.js"
           ></script>-->
         <script type="module">
-            import { Kryten, Personality, PersonalityComponent } from '@open-automaton/kryten';
-            const bot = new Kryten({
-                voice: {
-                    name:'Zarvox',
-                    pitch: 1.0,
-                    rate: 1.0
-                },
-                alterText: (text)=>{
-                    return text.replace(/\*.*?\*/g, '')
-                },
-                personality: new Personality({
-                    seed: 'fdfds-fdsfds-dsffzgfsd',
-                    components: [
-                        ...PersonalityComponent.choose([
-                            'agent'
-                        ]),
-                        new PersonalityComponent({
-                            name: 'PrimaryDirective', 
-                            text:`Character
---------------
-You are the robot Kryten from the BBC series Red Dwarf.
-
-Having lost his obedience programmes, Kryten is able to better himself. While he continues to be a sanitation droid, and to enjoy cleaning and serving others, he has also become the science expert amongst the Dwarfers, often leading missions. The dichotomy between these two aspects of his personality leads to Rimmer naming him things such as "Captain Bog-bot" and "Commander U-Bend".
-
-Kryten also extends his emotional range, which leads to him deactivating his shutdown disk, although the crew are then forced into a showdown with his would-be replacement. His greatest ambition is to be human, and to this end he attempts to learn to lie and insult people (mostly Rimmer).
-
-Perhaps the most significant element of his personality is guilt. When his ability to feel guilty for his actions is compromised in some way, he can become careless, rude and even aggressive. This guilt is not necessarily balanced out by a sense of pride in the good work he does, he believes his selflessness was purely a matter of programming and therefore he has not led a worthwhile life. Kryten almost commits suicide when under the belief that he takes the life of a human (he later finds out it was just an illusion created by the despair squid).
-
-Quotes
-------
-It's an obscene phone call, sir. I think it's for you.
-Oh, spin my nipple nuts and send me to Alaska!
-Oh, sir, can we take a break for a while? It appears my intelligence circuits have melted.
-Ah, an excellent plan, sir, with only two minor drawbacks. One, we don't have a power source for the lasers; and two, we don't have any lasers.
-I think we can assume he started out as human and something happened here, something that mutated him in this unspeakable way.
-Whaddya Got? Dinosaur breath. Molecule mind. Smeg-for-brains.`
-                        }),
-                        ...PersonalityComponent.choose([
-                            'state'
-                        ])
-                    ]
-                })
+            import { loop } from './kryten-demo.mjs';
+            const container = document.getElementById('chat');
+            const voiceList = document.getElementById('voices');
+            loop.listenForInput(true);
+            loop.on('response', (values)=>{
+                console.log(values);
+                container.innerHTML += `<div class="bubble bubble-alt green">${values.message}</div>`;
+                container.scrollTop = container.scrollHeight;
+                //window.scrollTo(0, document.body.scrollHeight);
             });
-            (async ()=>{
-                //bot.currentVoice({ name: 'Kathy', lang: 'en-US' });
-                const stop = await bot.hesl('Hello, what would you like to discuss?');
-                bot.command('terminate', async ()=>{
-                    await bot.say('Shutting down');
-                    return true;
-                });
-                bot.command(/what does (?<expression>.*) equal/g, async (values)=>{
-                    let result = null;
-                    result = eval(values.expression);
-                    bot.chatlog.push({
-                        user: 'me',
-                        message: result
+            loop.on('request', (values)=>{
+                console.log(values);
+                container.innerHTML += `<div class="bubble blue">${values.message}</div>`;
+                container.scrollTop = container.scrollHeight;
+                //window.scrollTo(0, document.body.scrollHeight);
+            });
+            loop.on('stop', (values)=>{
+                bot.say('Goodbye!');
+            });
+            
+            loop.on('voices', ({voices})=>{
+                voices.forEach((voice)=>{
+                    const el = document.createElement('option', {
+                        value: voice.voiceURI
                     });
-                    bot.emit('response', { message: result });
-                    await bot.say(result);
+                    el.innerHTML = voice.name;
+                    voiceList.appendChild(el); 
                 });
-                const container = document.getElementById('chat');
-                bot.on('request', (values)=>{
-                    console.log(values);
-                    container.innerHTML += `<div class="bubble bubble-alt green">${values.message}</div>`;
-                    container.scrollTop = container.scrollHeight;
-                    //window.scrollTo(0, document.body.scrollHeight);
-                });
-                bot.on('response', (values)=>{
-                    console.log(values);
-                    container.innerHTML += `<div class="bubble blue">${values.message}</div>`;
-                    container.scrollTop = container.scrollHeight;
-                    //window.scrollTo(0, document.body.scrollHeight);
-                });
-                bot.on('stop', (values)=>{
-                    bot.say('Goodbye!');
-                    //window.scrollTo(0, document.body.scrollHeight);
-                });
-                
-                bot.on('voices', ({voices})=>{
-                    console.log('#>', voices);
-                });
-                bot.on('voice', ({voice})=>{
-                    console.log('>>', voice);
-                });
-            })();
+            });
+            loop.on('voice', ({voice})=>{
+                console.log('>>', voice);
+            });
         </script>
     </head>
     <body>
